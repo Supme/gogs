@@ -49,7 +49,7 @@ func getForkRepository(ctx *context.Context) *models.Repository {
 		return nil
 	}
 
-	if !forkRepo.CanBeForked() || !forkRepo.HasAccess(ctx.User) {
+	if !forkRepo.CanBeForked() || !forkRepo.HasAccess(ctx.User.ID) {
 		ctx.Handle(404, "getForkRepository", nil)
 		return nil
 	}
@@ -116,6 +116,12 @@ func ForkPost(ctx *context.Context, form auth.CreateRepoForm) {
 			ctx.Error(403)
 			return
 		}
+	}
+
+	// Cannot fork to same owner
+	if ctxUser.ID == forkRepo.OwnerID {
+		ctx.RenderWithErr(ctx.Tr("repo.settings.cannot_fork_to_same_owner"), FORK, &form)
+		return
 	}
 
 	repo, err := models.ForkRepository(ctxUser, forkRepo, form.RepoName, form.Description)
@@ -626,6 +632,7 @@ func CompareAndPullRequest(ctx *context.Context) {
 		return
 	}
 
+	ctx.Data["IsSplitStyle"] = ctx.Query("style") == "split"
 	ctx.HTML(200, COMPARE_PULL)
 }
 

@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	HOOKS        base.TplName = "repo/settings/hooks"
-	HOOK_NEW     base.TplName = "repo/settings/hook_new"
-	ORG_HOOK_NEW base.TplName = "org/settings/hook_new"
+	WEBHOOKS        base.TplName = "repo/settings/webhooks"
+	WEBHOOK_NEW     base.TplName = "repo/settings/webhook_new"
+	ORG_WEBHOOK_NEW base.TplName = "org/settings/webhook_new"
 )
 
 func Webhooks(ctx *context.Context) {
@@ -33,6 +33,7 @@ func Webhooks(ctx *context.Context) {
 	ctx.Data["PageIsSettingsHooks"] = true
 	ctx.Data["BaseLink"] = ctx.Repo.RepoLink
 	ctx.Data["Description"] = ctx.Tr("repo.settings.hooks_desc", "https://github.com/gogits/go-gogs-client/wiki/Repositories-Webhooks")
+	ctx.Data["Types"] = setting.Webhook.Types
 
 	ws, err := models.GetWebhooksByRepoID(ctx.Repo.Repository.ID)
 	if err != nil {
@@ -41,7 +42,7 @@ func Webhooks(ctx *context.Context) {
 	}
 	ctx.Data["Webhooks"] = ws
 
-	ctx.HTML(200, HOOKS)
+	ctx.HTML(200, WEBHOOKS)
 }
 
 type OrgRepoCtx struct {
@@ -57,7 +58,7 @@ func getOrgRepoCtx(ctx *context.Context) (*OrgRepoCtx, error) {
 		return &OrgRepoCtx{
 			RepoID:      ctx.Repo.Repository.ID,
 			Link:        ctx.Repo.RepoLink,
-			NewTemplate: HOOK_NEW,
+			NewTemplate: WEBHOOK_NEW,
 		}, nil
 	}
 
@@ -65,7 +66,7 @@ func getOrgRepoCtx(ctx *context.Context) (*OrgRepoCtx, error) {
 		return &OrgRepoCtx{
 			OrgID:       ctx.Org.Organization.ID,
 			Link:        ctx.Org.OrgLink,
-			NewTemplate: ORG_HOOK_NEW,
+			NewTemplate: ORG_WEBHOOK_NEW,
 		}, nil
 	}
 
@@ -232,6 +233,7 @@ func DiscordHooksNewPost(ctx *context.Context, form auth.NewDiscordHookForm) {
 	meta, err := json.Marshal(&models.SlackMeta{
 		Username: form.Username,
 		IconURL:  form.IconURL,
+		Color:    form.Color,
 	})
 	if err != nil {
 		ctx.Handle(500, "Marshal", err)
@@ -272,7 +274,7 @@ func checkWebhook(ctx *context.Context) (*OrgRepoCtx, *models.Webhook) {
 
 	var w *models.Webhook
 	if orCtx.RepoID > 0 {
-		w, err = models.GetWebhookByRepoID(ctx.Repo.Repository.ID, ctx.ParamsInt64(":id"))
+		w, err = models.GetWebhookOfRepoByID(ctx.Repo.Repository.ID, ctx.ParamsInt64(":id"))
 	} else {
 		w, err = models.GetWebhookByOrgID(ctx.Org.Organization.ID, ctx.ParamsInt64(":id"))
 	}
@@ -418,6 +420,7 @@ func DiscordHooksEditPost(ctx *context.Context, form auth.NewDiscordHookForm) {
 	meta, err := json.Marshal(&models.SlackMeta{
 		Username: form.Username,
 		IconURL:  form.IconURL,
+		Color:    form.Color,
 	})
 	if err != nil {
 		ctx.Handle(500, "Marshal", err)
@@ -502,8 +505,8 @@ func TestWebhook(ctx *context.Context) {
 		Pusher: apiUser,
 		Sender: apiUser,
 	}
-	if err := models.PrepareWebhooks(ctx.Repo.Repository, models.HOOK_EVENT_PUSH, p); err != nil {
-		ctx.Flash.Error("PrepareWebhooks: " + err.Error())
+	if err := models.TestWebhook(ctx.Repo.Repository, models.HOOK_EVENT_PUSH, p, ctx.QueryInt64("id")); err != nil {
+		ctx.Flash.Error("TestWebhook: " + err.Error())
 		ctx.Status(500)
 	} else {
 		go models.HookQueue.Add(ctx.Repo.Repository.ID)

@@ -98,6 +98,16 @@ func (r *Repository) GetEditorconfig() (*editorconfig.Editorconfig, error) {
 	return editorconfig.ParseBytes(data)
 }
 
+// PullRequestURL returns URL for composing a pull request.
+// This function does not check if the repository can actually compose a pull request.
+func (r *Repository) PullRequestURL(baseBranch, headBranch string) string {
+	repoLink := r.RepoLink
+	if r.PullRequest.BaseRepo != nil {
+		repoLink = r.PullRequest.BaseRepo.Link()
+	}
+	return fmt.Sprintf("%s/compare/%s...%s:%s", repoLink, baseBranch, r.Owner.Name, headBranch)
+}
+
 func RetrieveBaseRepo(ctx *Context, repo *models.Repository) {
 	// Non-fork repository will not return error in this method.
 	if err := repo.GetBaseRepo(); err != nil {
@@ -146,18 +156,18 @@ func RepoAssignment(args ...bool) macaron.Handler {
 			err   error
 		)
 
-		userName := ctx.Params(":username")
-		repoName := ctx.Params(":reponame")
+		ownerName := ctx.Params(":username")
+		repoName := strings.TrimSuffix(ctx.Params(":reponame"), ".git")
 		refName := ctx.Params(":branchname")
 		if len(refName) == 0 {
 			refName = ctx.Params(":path")
 		}
 
 		// Check if the user is the same as the repository owner
-		if ctx.IsSigned && ctx.User.LowerName == strings.ToLower(userName) {
+		if ctx.IsSigned && ctx.User.LowerName == strings.ToLower(ownerName) {
 			owner = ctx.User
 		} else {
-			owner, err = models.GetUserByName(userName)
+			owner, err = models.GetUserByName(ownerName)
 			if err != nil {
 				if models.IsErrUserNotExist(err) {
 					if ctx.Query("go-get") == "1" {
@@ -196,7 +206,11 @@ func RepoAssignment(args ...bool) macaron.Handler {
 		if ctx.IsSigned && ctx.User.IsAdmin {
 			ctx.Repo.AccessMode = models.ACCESS_MODE_OWNER
 		} else {
-			mode, err := models.AccessLevel(ctx.User, repo)
+			var userID int64
+			if ctx.IsSigned {
+				userID = ctx.User.ID
+			}
+			mode, err := models.AccessLevel(userID, repo)
 			if err != nil {
 				ctx.Handle(500, "AccessLevel", err)
 				return
@@ -230,9 +244,9 @@ func RepoAssignment(args ...bool) macaron.Handler {
 		ctx.Data["RepoName"] = ctx.Repo.Repository.Name
 		ctx.Data["IsBareRepo"] = ctx.Repo.Repository.IsBare
 
-		gitRepo, err := git.OpenRepository(models.RepoPath(userName, repoName))
+		gitRepo, err := git.OpenRepository(models.RepoPath(ownerName, repoName))
 		if err != nil {
-			ctx.Handle(500, "RepoAssignment Invalid repo "+models.RepoPath(userName, repoName), err)
+			ctx.Handle(500, "RepoAssignment Invalid repo "+models.RepoPath(ownerName, repoName), err)
 			return
 		}
 		ctx.Repo.GitRepo = gitRepo

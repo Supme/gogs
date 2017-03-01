@@ -341,7 +341,7 @@ function initRepository() {
     // Branches
     if ($('.repository.settings.branches').length > 0) {
         initFilterSearchDropdown('.protected-branches .dropdown');
-        $('.enable-protection').change(function () {
+        $('.enable-protection, .enable-whitelist').change(function () {
             if (this.checked) {
                 $($(this).data('target')).removeClass('disabled');
             } else {
@@ -542,6 +542,20 @@ function initRepository() {
                 $item.find(".bar .add").css("width", addPercent + "%");
             });
         }
+
+        $('.diff-file-box .lines-num').click(function () {
+            if ($(this).attr('id')) {
+                window.location.href = '#' + $(this).attr('id');
+            }
+        });
+
+        $(window).on('hashchange', function (e) {
+            $('.diff-file-box .lines-code.active').removeClass('active');
+            var m = window.location.hash.match(/^#diff-.+$/);
+            if (m) {
+                $(m[0]).siblings('.lines-code').addClass('active');
+            }
+        }).trigger('hashchange');
     }
 
     // Quick start and repository home
@@ -916,6 +930,15 @@ function initWebhook() {
         }
     });
 
+    // Highlight payload on first click
+    $('.hook.history.list .toggle.button').click(function () {
+        $($(this).data('target') + ' .nohighlight').each(function () {
+            var $this = $(this);
+            $this.removeClass('nohighlight');
+            setTimeout(function(){ hljs.highlightBlock($this[0]) }, 500);
+        })
+    })
+
     // Test delivery
     $('#test-delivery').click(function () {
         var $this = $(this);
@@ -1209,7 +1232,9 @@ $(document).ready(function () {
     });
 
     // Semantic UI modules.
-    $('.dropdown').dropdown();
+    $('.ui.dropdown').dropdown({
+        forceSelection: false
+    });
     $('.jump.dropdown').dropdown({
         action: 'hide',
         onShow: function () {

@@ -7,10 +7,13 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gogits/git-module"
 	api "github.com/gogits/go-gogs-client"
+
+	"github.com/gogits/gogs/modules/setting"
 )
 
 type DiscordEmbedFooterObject struct {
@@ -32,6 +35,7 @@ type DiscordEmbedObject struct {
 	Title       string                     `json:"title"`
 	Description string                     `json:"description"`
 	URL         string                     `json:"url"`
+	Color       int                        `json:"color"`
 	Footer      *DiscordEmbedFooterObject  `json:"footer"`
 	Author      *DiscordEmbedAuthorObject  `json:"author"`
 	Fields      []*DiscordEmbedFieldObject `json:"fields"`
@@ -44,14 +48,16 @@ type DiscordPayload struct {
 	Embeds    []*DiscordEmbedObject `json:"embeds"`
 }
 
-func (p *DiscordPayload) SetSecret(_ string) {}
-
 func (p *DiscordPayload) JSONPayload() ([]byte, error) {
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return []byte{}, err
 	}
 	return data, nil
+}
+
+func DiscordTextFormatter(s string) string {
+	return strings.Split(s, "\n")[0]
 }
 
 func DiscordLinkFormatter(url string, text string) string {
@@ -70,11 +76,14 @@ func getDiscordCreatePayload(p *api.CreatePayload, slack *SlackMeta) (*DiscordPa
 	refLink := DiscordLinkFormatter(p.Repo.HTMLURL+"/src/"+refName, refName)
 	content := fmt.Sprintf("Created new %s: %s/%s", p.RefType, repoLink, refLink)
 
+	color, _ := strconv.ParseInt(strings.TrimLeft(slack.Color, "#"), 16, 32)
 	return &DiscordPayload{
 		Username:  slack.Username,
 		AvatarURL: slack.IconURL,
 		Embeds: []*DiscordEmbedObject{{
 			Description: content,
+			URL:         setting.AppUrl + p.Sender.UserName,
+			Color:       int(color),
 			Author: &DiscordEmbedAuthorObject{
 				Name:    p.Sender.UserName,
 				IconURL: p.Sender.AvatarUrl,
@@ -109,18 +118,21 @@ func getDiscordPushPayload(p *api.PushPayload, slack *SlackMeta) (*DiscordPayloa
 
 	// for each commit, generate attachment text
 	for i, commit := range p.Commits {
-		content += fmt.Sprintf("%s %s - %s", DiscordSHALinkFormatter(commit.URL, commit.ID[:7]), SlackShortTextFormatter(commit.Message), commit.Author.Name)
+		content += fmt.Sprintf("%s %s - %s", DiscordSHALinkFormatter(commit.URL, commit.ID[:7]), DiscordTextFormatter(commit.Message), commit.Author.Name)
 		// add linebreak to each commit but the last
 		if i < len(p.Commits)-1 {
 			content += "\n"
 		}
 	}
 
+	color, _ := strconv.ParseInt(strings.TrimLeft(slack.Color, "#"), 16, 32)
 	return &DiscordPayload{
 		Username:  slack.Username,
 		AvatarURL: slack.IconURL,
 		Embeds: []*DiscordEmbedObject{{
 			Description: content,
+			URL:         setting.AppUrl + p.Sender.UserName,
+			Color:       int(color),
 			Author: &DiscordEmbedAuthorObject{
 				Name:    p.Sender.UserName,
 				IconURL: p.Sender.AvatarUrl,
@@ -173,6 +185,7 @@ func getDiscordPullRequestPayload(p *api.PullRequestPayload, slack *SlackMeta) (
 		title = "Pull request synchronized: " + title
 	}
 
+	color, _ := strconv.ParseInt(strings.TrimLeft(slack.Color, "#"), 16, 32)
 	return &DiscordPayload{
 		Username:  slack.Username,
 		AvatarURL: slack.IconURL,
@@ -180,6 +193,7 @@ func getDiscordPullRequestPayload(p *api.PullRequestPayload, slack *SlackMeta) (
 			Title:       title,
 			Description: content,
 			URL:         url,
+			Color:       int(color),
 			Footer: &DiscordEmbedFooterObject{
 				Text: p.Repository.FullName,
 			},

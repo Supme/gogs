@@ -92,7 +92,7 @@ func checkVersion() {
 		{"github.com/go-macaron/csrf", csrf.Version, "0.1.0"},
 		{"github.com/go-macaron/i18n", i18n.Version, "0.3.0"},
 		{"github.com/go-macaron/session", session.Version, "0.1.6"},
-		{"github.com/go-macaron/toolbox", toolbox.Version, "0.1.0"},
+		{"github.com/go-macaron/toolbox", toolbox.Version, "0.1.3"},
 		{"gopkg.in/ini.v1", ini.Version, "1.8.4"},
 		{"gopkg.in/macaron.v1", macaron.Version, "1.1.7"},
 		{"github.com/gogits/git-module", git.Version, "0.4.12"},
@@ -527,25 +527,9 @@ func runWeb(ctx *cli.Context) error {
 			m.Get("/new", repo.NewRelease)
 			m.Post("/new", bindIgnErr(auth.NewReleaseForm{}), repo.NewReleasePost)
 			m.Post("/delete", repo.DeleteRelease)
-		}, reqRepoWriter, context.RepoRef())
-
-		m.Group("/releases", func() {
 			m.Get("/edit/*", repo.EditRelease)
 			m.Post("/edit/*", bindIgnErr(auth.EditReleaseForm{}), repo.EditReleasePost)
-		}, reqRepoWriter, func(ctx *context.Context) {
-			var err error
-			ctx.Repo.Commit, err = ctx.Repo.GitRepo.GetBranchCommit(ctx.Repo.Repository.DefaultBranch)
-			if err != nil {
-				ctx.Handle(500, "GetBranchCommit", err)
-				return
-			}
-			ctx.Repo.CommitsCount, err = ctx.Repo.Commit.CommitsCount()
-			if err != nil {
-				ctx.Handle(500, "CommitsCount", err)
-				return
-			}
-			ctx.Data["CommitsCount"] = ctx.Repo.CommitsCount
-		})
+		}, reqRepoWriter, context.RepoRef())
 
 		// FIXME: Should use ctx.Repo.PullRequest to unify template, currently we have inconsistent URL
 		// for PR in same repository. After select branch on the page, the URL contains redundant head user name.
@@ -632,14 +616,17 @@ func runWeb(ctx *cli.Context) error {
 	}, ignSignIn, context.RepoAssignment(), context.RepoRef())
 
 	m.Group("/:username", func() {
-		m.Group("/:reponame", func() {
-			m.Get("", repo.Home)
-			m.Get("\\.git$", repo.Home)
+		m.Group("", func() {
+			m.Get("/:reponame", repo.Home)
 		}, ignSignIn, context.RepoAssignment(true), context.RepoRef())
 
 		m.Group("/:reponame", func() {
 			m.Head("/tasks/trigger", repo.TriggerTask)
-			m.Route("\\.git/*", "GET,POST", ignSignInAndCsrf, repo.HTTPContexter(), repo.HTTP)
+		})
+		// Use the regexp to match the repository name validation
+		m.Group("/:reponame([\\d\\w-_\\.]+\\.git$)", func() {
+			m.Get("", ignSignIn, context.RepoAssignment(true), context.RepoRef(), repo.Home)
+			m.Route("/*", "GET,POST", ignSignInAndCsrf, repo.HTTPContexter(), repo.HTTP)
 		})
 	})
 	// ***** END: Repository *****
