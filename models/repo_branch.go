@@ -9,14 +9,18 @@ import (
 	"strings"
 
 	"github.com/Unknwon/com"
-	"github.com/gogits/git-module"
+	"github.com/gogs/git-module"
 
-	"github.com/gogits/gogs/modules/base"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/tool"
 )
 
 type Branch struct {
-	Path string
-	Name string
+	RepoPath string
+	Name     string
+
+	IsProtected bool
+	Commit      *git.Commit
 }
 
 func GetBranchesByPath(path string) ([]*Branch, error) {
@@ -33,8 +37,8 @@ func GetBranchesByPath(path string) ([]*Branch, error) {
 	branches := make([]*Branch, len(brs))
 	for i := range brs {
 		branches[i] = &Branch{
-			Path: path,
-			Name: brs[i],
+			RepoPath: path,
+			Name:     brs[i],
 		}
 	}
 	return branches, nil
@@ -42,11 +46,11 @@ func GetBranchesByPath(path string) ([]*Branch, error) {
 
 func (repo *Repository) GetBranch(br string) (*Branch, error) {
 	if !git.IsBranchExist(repo.RepoPath(), br) {
-		return nil, ErrBranchNotExist{br}
+		return nil, errors.ErrBranchNotExist{br}
 	}
 	return &Branch{
-		Path: repo.RepoPath(),
-		Name: br,
+		RepoPath: repo.RepoPath(),
+		Name:     br,
 	}, nil
 }
 
@@ -55,7 +59,7 @@ func (repo *Repository) GetBranches() ([]*Branch, error) {
 }
 
 func (br *Branch) GetCommit() (*git.Commit, error) {
-	gitRepo, err := git.OpenRepository(br.Path)
+	gitRepo, err := git.OpenRepository(br.RepoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +102,7 @@ func GetProtectBranchOfRepoByName(repoID int64, name string) (*ProtectBranch, er
 	if err != nil {
 		return nil, err
 	} else if !has {
-		return nil, ErrBranchNotExist{name}
+		return nil, errors.ErrBranchNotExist{name}
 	}
 	return protectBranch, nil
 }
@@ -116,7 +120,7 @@ func IsBranchOfRepoRequirePullRequest(repoID int64, name string) bool {
 // If ID is 0, it creates a new record. Otherwise, updates existing record.
 func UpdateProtectBranch(protectBranch *ProtectBranch) (err error) {
 	sess := x.NewSession()
-	defer sessionRelease(sess)
+	defer sess.Close()
 	if err = sess.Begin(); err != nil {
 		return err
 	}
@@ -127,7 +131,7 @@ func UpdateProtectBranch(protectBranch *ProtectBranch) (err error) {
 		}
 	}
 
-	if _, err = sess.Id(protectBranch.ID).AllCols().Update(protectBranch); err != nil {
+	if _, err = sess.ID(protectBranch.ID).AllCols().Update(protectBranch); err != nil {
 		return fmt.Errorf("Update: %v", err)
 	}
 
@@ -146,10 +150,10 @@ func UpdateOrgProtectBranch(repo *Repository, protectBranch *ProtectBranch, whit
 	}
 
 	hasUsersChanged := false
-	validUserIDs := base.StringsToInt64s(strings.Split(protectBranch.WhitelistUserIDs, ","))
+	validUserIDs := tool.StringsToInt64s(strings.Split(protectBranch.WhitelistUserIDs, ","))
 	if protectBranch.WhitelistUserIDs != whitelistUserIDs {
 		hasUsersChanged = true
-		userIDs := base.StringsToInt64s(strings.Split(whitelistUserIDs, ","))
+		userIDs := tool.StringsToInt64s(strings.Split(whitelistUserIDs, ","))
 		validUserIDs = make([]int64, 0, len(userIDs))
 		for _, userID := range userIDs {
 			has, err := HasAccess(userID, repo, ACCESS_MODE_WRITE)
@@ -162,14 +166,14 @@ func UpdateOrgProtectBranch(repo *Repository, protectBranch *ProtectBranch, whit
 			validUserIDs = append(validUserIDs, userID)
 		}
 
-		protectBranch.WhitelistUserIDs = strings.Join(base.Int64sToStrings(validUserIDs), ",")
+		protectBranch.WhitelistUserIDs = strings.Join(tool.Int64sToStrings(validUserIDs), ",")
 	}
 
 	hasTeamsChanged := false
-	validTeamIDs := base.StringsToInt64s(strings.Split(protectBranch.WhitelistTeamIDs, ","))
+	validTeamIDs := tool.StringsToInt64s(strings.Split(protectBranch.WhitelistTeamIDs, ","))
 	if protectBranch.WhitelistTeamIDs != whitelistTeamIDs {
 		hasTeamsChanged = true
-		teamIDs := base.StringsToInt64s(strings.Split(whitelistTeamIDs, ","))
+		teamIDs := tool.StringsToInt64s(strings.Split(whitelistTeamIDs, ","))
 		teams, err := GetTeamsHaveAccessToRepo(repo.OwnerID, repo.ID, ACCESS_MODE_WRITE)
 		if err != nil {
 			return fmt.Errorf("GetTeamsHaveAccessToRepo [org_id: %d, repo_id: %d]: %v", repo.OwnerID, repo.ID, err)
@@ -181,7 +185,14 @@ func UpdateOrgProtectBranch(repo *Repository, protectBranch *ProtectBranch, whit
 			}
 		}
 
-		protectBranch.WhitelistTeamIDs = strings.Join(base.Int64sToStrings(validTeamIDs), ",")
+		protectBranch.WhitelistTeamIDs = strings.Join(tool.Int64sToStrings(validTeamIDs), ",")
+	}
+
+	// Make sure protectBranch.ID is not 0 for whitelists
+	if protectBranch.ID == 0 {
+		if _, err = x.Insert(protectBranch); err != nil {
+			return fmt.Errorf("Insert: %v", err)
+		}
 	}
 
 	// Merge users and members of teams
@@ -218,18 +229,12 @@ func UpdateOrgProtectBranch(repo *Repository, protectBranch *ProtectBranch, whit
 	}
 
 	sess := x.NewSession()
-	defer sessionRelease(sess)
+	defer sess.Close()
 	if err = sess.Begin(); err != nil {
 		return err
 	}
 
-	if protectBranch.ID == 0 {
-		if _, err = sess.Insert(protectBranch); err != nil {
-			return fmt.Errorf("Insert: %v", err)
-		}
-	}
-
-	if _, err = sess.Id(protectBranch.ID).AllCols().Update(protectBranch); err != nil {
+	if _, err = sess.ID(protectBranch.ID).AllCols().Update(protectBranch); err != nil {
 		return fmt.Errorf("Update: %v", err)
 	}
 
@@ -248,5 +253,5 @@ func UpdateOrgProtectBranch(repo *Repository, protectBranch *ProtectBranch, whit
 // GetProtectBranchesByRepoID returns a list of *ProtectBranch in given repostiory.
 func GetProtectBranchesByRepoID(repoID int64) ([]*ProtectBranch, error) {
 	protectBranches := make([]*ProtectBranch, 0, 2)
-	return protectBranches, x.Where("repo_id = ?", repoID).Asc("name").Find(&protectBranches)
+	return protectBranches, x.Where("repo_id = ? and protected = ?", repoID, true).Asc("name").Find(&protectBranches)
 }
