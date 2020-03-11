@@ -40,7 +40,6 @@ function initEditPreviewTab($form) {
             var $this = $(this);
             $.post($this.data('url'), {
                 "_csrf": csrf,
-                "mode": "gfm",
                 "context": $this.data('context'),
                 "text": $form.find('.tab.segment[data-tab="' + $tabMenu.data('write') + '"] textarea').val()
             },
@@ -426,7 +425,7 @@ function initRepository() {
             if (confirm($this.data('locale'))) {
                 $.post($this.data('url'), {
                     "_csrf": csrf
-                }).success(function () {
+                }).done(function () {
                     $('#' + $this.data('comment-id')).remove();
                 });
             }
@@ -719,7 +718,7 @@ function initEditor() {
         var val = $editFilename.val(), m, mode, spec, extension, extWithDot, previewLink, dataUrl, apiCall;
         extension = extWithDot = "";
         if (m = /.+\.([^.]+)$/.exec(val)) {
-            extension = m[1];
+            extension = m[1].toLowerCase();
             extWithDot = "." + extension;
         }
 
@@ -1203,17 +1202,9 @@ $(document).ready(function () {
         $($(this).data('target')).slideToggle(100);
     });
 
-    // Highlight JS
-    if (typeof hljs != 'undefined') {
-        hljs.initHighlightingOnLoad();
-    }
-
     // Dropzone
     var $dropzone = $('#dropzone');
     if ($dropzone.length > 0) {
-        // Disable auto discover for all elements:
-        Dropzone.autoDiscover = false;
-
         var filenameDict = {};
         $dropzone.dropzone({
             url: $dropzone.data('upload-url'),
@@ -1258,7 +1249,7 @@ $(document).ready(function () {
     }
 
     // Clipboard JS
-    var clipboard = new Clipboard('.clipboard');
+    var clipboard = new ClipboardJS('.clipboard');
     clipboard.on('success', function (e) {
         e.clearSelection();
 
@@ -1291,7 +1282,7 @@ $(document).ready(function () {
             headers: {
                 'X-AJAX': "true"
             }
-        }).success(function (data, status, request) {
+        }).done(function (data, status, request) {
             $(data).insertBefore($this);
 
             // Update new URL or remove self if no more feeds
@@ -1319,7 +1310,7 @@ $(document).ready(function () {
                 $.post($this.data('url'), {
                     "_csrf": csrf,
                     "id": $this.data("id")
-                }).success(function (data) {
+                }).done(function (data) {
                     window.location.href = data.redirect;
                 });
             }
