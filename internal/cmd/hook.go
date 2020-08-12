@@ -23,7 +23,6 @@ import (
 
 	"gogs.io/gogs/internal/conf"
 	"gogs.io/gogs/internal/db"
-	"gogs.io/gogs/internal/db/errors"
 	"gogs.io/gogs/internal/email"
 	"gogs.io/gogs/internal/httplib"
 )
@@ -93,7 +92,7 @@ func runHookPreReceive(c *cli.Context) error {
 		repoID := com.StrTo(os.Getenv(db.ENV_REPO_ID)).MustInt64()
 		protectBranch, err := db.GetProtectBranchOfRepoByName(repoID, branchName)
 		if err != nil {
-			if errors.IsErrBranchNotExist(err) {
+			if db.IsErrBranchNotExist(err) {
 				continue
 			}
 			fail("Internal error", "GetProtectBranchOfRepoByName [repo_id: %d, branch: %s]: %v", repoID, branchName, err)
@@ -239,9 +238,10 @@ func runHookPostReceive(c *cli.Context) error {
 		reqURL := fmt.Sprintf("%s%s/%s/tasks/trigger?%s", conf.Server.LocalRootURL, options.RepoUserName, options.RepoName, q.Encode())
 		log.Trace("Trigger task: %s", reqURL)
 
-		resp, err := httplib.Head(reqURL).SetTLSClientConfig(&tls.Config{
-			InsecureSkipVerify: true,
-		}).Response()
+		resp, err := httplib.Get(reqURL).
+			SetTLSClientConfig(&tls.Config{
+				InsecureSkipVerify: true,
+			}).Response()
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode/100 != 2 {

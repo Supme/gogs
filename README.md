@@ -1,6 +1,6 @@
 # <img src="https://github.com/gogs/gogs/raw/master/public/img/favicon.png" width="45" align="left">Gogs - A painless self-hosted Git service
 
-[![Build status](https://img.shields.io/travis/gogs/gogs/master.svg?style=for-the-badge&logo=travis)](https://travis-ci.org/gogs/gogs) [![Build status](https://img.shields.io/appveyor/ci/Unknwon/gogs?logo=appveyor&style=for-the-badge)](https://ci.appveyor.com/project/Unknwon/gogs/branch/master) [![Discord](https://img.shields.io/discord/382595433060499458.svg?style=for-the-badge&logo=discord)](https://discord.gg/9aqdHU7) [![Sourcegraph](https://img.shields.io/badge/view%20on-Sourcegraph-brightgreen.svg?style=for-the-badge&logo=sourcegraph)](https://sourcegraph.com/github.com/gogs/gogs)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/gogs/gogs/Go?logo=github&style=for-the-badge)](https://github.com/gogs/gogs/actions?query=workflow%3AGo) [![Discord](https://img.shields.io/discord/382595433060499458.svg?style=for-the-badge&logo=discord)](https://discord.gg/9aqdHU7) [![Sourcegraph](https://img.shields.io/badge/view%20on-Sourcegraph-brightgreen.svg?style=for-the-badge&logo=sourcegraph)](https://sourcegraph.com/github.com/gogs/gogs)
 
 ![Repository](https://gogs.io/img/screenshots/2.png)
 
@@ -17,7 +17,7 @@ The Gogs (`/gɑgz/`) project aims to build a simple, stable and extensible self-
 - Want to try it before doing anything else? Do it [online](https://try.gogs.io/gogs/gogs)!
 - Having trouble? Help yourself with [troubleshooting](https://gogs.io/docs/intro/troubleshooting.html) or ask questions on [user forum](https://discuss.gogs.io/).
 - Want to help with localization? Check out the [localization documentation](https://gogs.io/docs/features/i18n.html).
-- Ready to get hands dirty? Read [our guide](docs/local_development.md) to set up your development environment.
+- Ready to get hands dirty? Read our guide to [set up your development environment](docs/dev/local_development.md).
 - Hmm... What about APIs? We have experimental support with [documentation](https://github.com/gogs/docs-api).
 
 ## 💌 Features
@@ -26,7 +26,7 @@ The Gogs (`/gɑgz/`) project aims to build a simple, stable and extensible self-
 - Access repositories via SSH, HTTP and HTTPS protocols.
 - User, organization and repository management.
 - Repository and organization webhooks, including Slack, Discord and Dingtalk.
-- Repository Git hooks and deploy keys.
+- Repository Git hooks, deploy keys and Git LFS.
 - Repository issues, pull requests, wiki, protected branches and collaboration.
 - Migrate and mirror repositories with wiki from other code hosts.
 - Web editor for quick editing repository files and wiki.
@@ -62,7 +62,6 @@ There are 6 ways to install Gogs:
 
 ### Deploy to cloud
 
-- [OpenShift](https://github.com/tkisme/gogs-openshift)
 - [Cloudron](https://cloudron.io/appstore.html#io.gogs.cloudronapp)
 - [Scaleway](https://www.scaleway.com/imagehub/gogs/)
 - [Sandstorm](https://github.com/cem/gogs-sandstorm)

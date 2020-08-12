@@ -12,6 +12,8 @@ import (
 
 	"xorm.io/builder"
 	"xorm.io/xorm"
+
+	"gogs.io/gogs/internal/errutil"
 )
 
 var (
@@ -99,7 +101,7 @@ func (org *User) RemoveOrgRepo(repoID int64) error {
 
 // CreateOrganization creates record of a new organization.
 func CreateOrganization(org, owner *User) (err error) {
-	if err = IsUsableUsername(org.Name); err != nil {
+	if err = isUsernameAllowed(org.Name); err != nil {
 		return err
 	}
 
@@ -107,7 +109,7 @@ func CreateOrganization(org, owner *User) (err error) {
 	if err != nil {
 		return err
 	} else if isExist {
-		return ErrUserAlreadyExist{org.Name}
+		return ErrUserAlreadyExist{args: errutil.Args{"name": org.Name}}
 	}
 
 	org.LowerName = strings.ToLower(org.Name)
@@ -131,7 +133,7 @@ func CreateOrganization(org, owner *User) (err error) {
 	if _, err = sess.Insert(org); err != nil {
 		return fmt.Errorf("insert organization: %v", err)
 	}
-	org.GenerateRandomAvatar()
+	_ = org.GenerateRandomAvatar()
 
 	// Add initial creator to organization and owner team.
 	if _, err = sess.Insert(&OrgUser{
@@ -148,7 +150,7 @@ func CreateOrganization(org, owner *User) (err error) {
 		OrgID:      org.ID,
 		LowerName:  strings.ToLower(OWNER_TEAM),
 		Name:       OWNER_TEAM,
-		Authorize:  ACCESS_MODE_OWNER,
+		Authorize:  AccessModeOwner,
 		NumMembers: 1,
 	}
 	if _, err = sess.Insert(t); err != nil {
@@ -177,7 +179,7 @@ func GetOrgByName(name string) (*User, error) {
 	}
 	u := &User{
 		LowerName: strings.ToLower(name),
-		Type:      USER_TYPE_ORGANIZATION,
+		Type:      UserOrganization,
 	}
 	has, err := x.Get(u)
 	if err != nil {
@@ -356,10 +358,8 @@ func AddOrgUser(orgID, uid int64) error {
 	}
 
 	if _, err := sess.Insert(ou); err != nil {
-		sess.Rollback()
 		return err
 	} else if _, err = sess.Exec("UPDATE `user` SET num_members = num_members + 1 WHERE id = ?", orgID); err != nil {
-		sess.Rollback()
 		return err
 	}
 

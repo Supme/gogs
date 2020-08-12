@@ -18,7 +18,6 @@ import (
 
 	"gogs.io/gogs/internal/conf"
 	"gogs.io/gogs/internal/db"
-	dberrors "gogs.io/gogs/internal/db/errors"
 )
 
 type PullRequest struct {
@@ -53,22 +52,22 @@ type Repository struct {
 
 // IsOwner returns true if current user is the owner of repository.
 func (r *Repository) IsOwner() bool {
-	return r.AccessMode >= db.ACCESS_MODE_OWNER
+	return r.AccessMode >= db.AccessModeOwner
 }
 
 // IsAdmin returns true if current user has admin or higher access of repository.
 func (r *Repository) IsAdmin() bool {
-	return r.AccessMode >= db.ACCESS_MODE_ADMIN
+	return r.AccessMode >= db.AccessModeAdmin
 }
 
 // IsWriter returns true if current user has write or higher access of repository.
 func (r *Repository) IsWriter() bool {
-	return r.AccessMode >= db.ACCESS_MODE_WRITE
+	return r.AccessMode >= db.AccessModeWrite
 }
 
 // HasAccess returns true if the current user has at least read access for this repository
 func (r *Repository) HasAccess() bool {
-	return r.AccessMode >= db.ACCESS_MODE_READ
+	return r.AccessMode >= db.AccessModeRead
 }
 
 // CanEnableEditor returns true if repository is editable and user has proper access level.
@@ -147,7 +146,7 @@ func RepoAssignment(pages ...bool) macaron.Handler {
 		} else {
 			owner, err = db.GetUserByName(ownerName)
 			if err != nil {
-				c.NotFoundOrServerError("GetUserByName", dberrors.IsUserNotExist, err)
+				c.NotFoundOrError(err, "get user by name")
 				return
 			}
 		}
@@ -156,7 +155,7 @@ func RepoAssignment(pages ...bool) macaron.Handler {
 
 		repo, err := db.GetRepositoryByName(owner.ID, repoName)
 		if err != nil {
-			c.NotFoundOrServerError("GetRepositoryByName", dberrors.IsRepoNotExist, err)
+			c.NotFoundOrError(err, "get repository by name")
 			return
 		}
 
@@ -169,18 +168,18 @@ func RepoAssignment(pages ...bool) macaron.Handler {
 
 		// Admin has super access.
 		if c.IsLogged && c.User.IsAdmin {
-			c.Repo.AccessMode = db.ACCESS_MODE_OWNER
+			c.Repo.AccessMode = db.AccessModeOwner
 		} else {
 			mode, err := db.UserAccessMode(c.UserID(), repo)
 			if err != nil {
-				c.ServerError("UserAccessMode", err)
+				c.Error(err, "get user access mode")
 				return
 			}
 			c.Repo.AccessMode = mode
 		}
 
 		// Check access
-		if c.Repo.AccessMode == db.ACCESS_MODE_NONE {
+		if c.Repo.AccessMode == db.AccessModeNone {
 			// Redirect to any accessible page if not yet on it
 			if repo.IsPartialPublic() &&
 				(!(isIssuesPage || isWikiPage) ||
@@ -212,7 +211,7 @@ func RepoAssignment(pages ...bool) macaron.Handler {
 		if repo.IsMirror {
 			c.Repo.Mirror, err = db.GetMirrorByRepoID(repo.ID)
 			if err != nil {
-				c.ServerError("GetMirror", err)
+				c.Error(err, "get mirror by repository ID")
 				return
 			}
 			c.Data["MirrorEnablePrune"] = c.Repo.Mirror.EnablePrune
@@ -222,14 +221,14 @@ func RepoAssignment(pages ...bool) macaron.Handler {
 
 		gitRepo, err := git.Open(db.RepoPath(ownerName, repoName))
 		if err != nil {
-			c.ServerError("open repository", err)
+			c.Error(err, "open repository")
 			return
 		}
 		c.Repo.GitRepo = gitRepo
 
 		tags, err := c.Repo.GitRepo.Tags()
 		if err != nil {
-			c.ServerError("get tags", err)
+			c.Error(err, "get tags")
 			return
 		}
 		c.Data["Tags"] = tags
@@ -260,7 +259,7 @@ func RepoAssignment(pages ...bool) macaron.Handler {
 		c.Data["TagName"] = c.Repo.TagName
 		branches, err := c.Repo.GitRepo.Branches()
 		if err != nil {
-			c.ServerError("get branches", err)
+			c.Error(err, "get branches")
 			return
 		}
 		c.Data["Branches"] = branches
@@ -300,7 +299,7 @@ func RepoRef() macaron.Handler {
 			repoPath := db.RepoPath(c.Repo.Owner.Name, c.Repo.Repository.Name)
 			c.Repo.GitRepo, err = git.Open(repoPath)
 			if err != nil {
-				c.Handle(500, "RepoRef Invalid repo "+repoPath, err)
+				c.Error(err, "open repository")
 				return
 			}
 		}
@@ -311,14 +310,14 @@ func RepoRef() macaron.Handler {
 			if !c.Repo.GitRepo.HasBranch(refName) {
 				branches, err := c.Repo.GitRepo.Branches()
 				if err != nil {
-					c.ServerError("get branches", err)
+					c.Error(err, "get branches")
 					return
 				}
 				refName = branches[0]
 			}
 			c.Repo.Commit, err = c.Repo.GitRepo.BranchCommit(refName)
 			if err != nil {
-				c.ServerError("get branch commit", err)
+				c.Error(err, "get branch commit")
 				return
 			}
 			c.Repo.CommitID = c.Repo.Commit.ID.String()
@@ -349,7 +348,7 @@ func RepoRef() macaron.Handler {
 
 				c.Repo.Commit, err = c.Repo.GitRepo.BranchCommit(refName)
 				if err != nil {
-					c.ServerError("get branch commit", err)
+					c.Error(err, "get branch commit")
 					return
 				}
 				c.Repo.CommitID = c.Repo.Commit.ID.String()
@@ -358,7 +357,7 @@ func RepoRef() macaron.Handler {
 				c.Repo.IsViewTag = true
 				c.Repo.Commit, err = c.Repo.GitRepo.TagCommit(refName)
 				if err != nil {
-					c.ServerError("get tag commit", err)
+					c.Error(err, "get tag commit")
 					return
 				}
 				c.Repo.CommitID = c.Repo.Commit.ID.String()
@@ -372,7 +371,7 @@ func RepoRef() macaron.Handler {
 					return
 				}
 			} else {
-				c.Handle(404, "RepoRef invalid repo", fmt.Errorf("branch or tag not exist: %s", refName))
+				c.NotFound()
 				return
 			}
 		}
